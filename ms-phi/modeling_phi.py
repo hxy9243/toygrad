@@ -30,6 +30,8 @@ class PhiCausalLM(nn.Module):
         super().__init__()
 
         self.max_position_embeddings = config.max_position_embeddings
+        rope = Phi3RotaryPositionEmbedding(config)
+
         self.model = nn.ModuleDict(
             dict(
                 embed_tokens=nn.Embedding(
@@ -39,7 +41,7 @@ class PhiCausalLM(nn.Module):
                     dtype=torch.bfloat16,
                 ),
                 layers=nn.ModuleList(
-                    [DecodeLayer(config) for _ in range(config.num_hidden_layers)]
+                    [DecodeLayer(config, rope) for _ in range(config.num_hidden_layers)]
                 ),
                 norm=Phi3RMSNorm(config),
             )
@@ -134,8 +136,8 @@ class Phi3RotaryPositionEmbedding(nn.Module):
         return cache.cos().to(torch.bfloat16), cache.sin().to(torch.bfloat16)
 
     def rotate_half(self, x: torch.Tensor) -> torch.Tensor:
-        x0 = x[..., :x.shape[-1] // 2]
-        x1 = x[..., x.shape[-1] // 2:]
+        x0 = x[:x.shape[-1] // 2]
+        x1 = x[x.shape[-1] // 2:]
 
         return torch.cat((-x1, x0), dim=-1)
 
@@ -144,21 +146,22 @@ class Phi3RotaryPositionEmbedding(nn.Module):
         """ assume the x input is of shape (bs, head, seq, head_dim)
         """
         bs, nhead, s, head_dim = x.shape
-        cos = self.cos[:s, :].to(x.dtype)
-        sin = self.sin[:s, :].to(x.dtype)
+
+        cos = self.cos[:, :s, :].to(x.dtype)
+        sin = self.sin[:, :s, :].to(x.dtype)
 
         return x * cos + self.rotate_half(x) * sin
 
 
 class DecodeLayer(nn.Module):
 
-    def __init__(self, config: PhiLMConfig):
+    def __init__(self, config: PhiLMConfig, rope: "Phi3RotaryPositionEmbedding"):
         super().__init__()
 
         self.input_layernorm = Phi3RMSNorm(config)
         self.post_attention_layernorm = Phi3RMSNorm(config)
 
-        self.self_attn = AttentionLayer(config, Phi3RotaryPositionEmbedding(config))
+        self.self_attn = AttentionLayer(config, rope)
         self.mlp = MLP(config)
 
     def forward(self, x) -> torch.Tensor:
@@ -230,7 +233,7 @@ class AttentionLayer(nn.Module):
         output = output @ v # bs, head, seq, head_size
 
         # output of shape (bs, seq, hidden)
-        output = output.transpose(2, 1)  # bs, seq, head, head_size
+        output = output.transpose(1, 2)  # bs, seq, head, head_size
         output = output.contiguous().view(input_shape)
 
         output = self.o_proj(output)
