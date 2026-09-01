@@ -50,31 +50,22 @@ class PhiCausalLM(nn.Module):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False, dtype=torch.bfloat16)
 
     @classmethod
-    def from_pretrained(cls):
+    def from_pretrained(cls, model_id: str = 'microsoft/Phi-3.5-mini-instruct'):
         from transformers import AutoModelForCausalLM
-        weights = AutoModelForCausalLM.from_pretrained('microsoft/Phi-3.5-mini-instruct')
+        weights = AutoModelForCausalLM.from_pretrained(model_id)
 
         config = PhiLMConfig()
-        model = PhiCausalLM(config)
-        state_dict = model.state_dict()
-
-        for k, param in state_dict.items():
-            print(f"layer name {k}, {param.shape}")
-
-        for name, weight in weights.state_dict().items():
-            print(f'copying weights for {name}')
-            with torch.no_grad():
-                weight.copy_(state_dict[name])
-
+        model = cls(config)
+        model.load_state_dict(weights.state_dict(), strict=False)
         return model
 
     @torch.no_grad()
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """forward the input through the transformer layer, return logits.
         input shape (Batch_size, Sequence size)
-        return shape (Batch_size, 1)
+        return shape (Batch_size, Sequence size, vocab_size)
         """
-        B, S = x.size()
+        _, S = x.size()
         assert S <= self.max_position_embeddings
 
         x = self.model.embed_tokens(x)
@@ -84,6 +75,57 @@ class PhiCausalLM(nn.Module):
 
         x = self.model.norm(x)
         return self.lm_head(x)
+
+    @torch.no_grad()
+    def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 20,
+        tokenizer=None,
+        eos_token_id: int = 32000,
+        return_tokens: bool = False,
+    ):
+        """Generate text given a prompt string and maximum number of tokens.
+
+        Args:
+            prompt (str): Input text prompt.
+            max_tokens (int): Maximum number of answer tokens to generate.
+            tokenizer: AutoTokenizer instance. If None, loaded from pretrained model_id.
+            eos_token_id (int): EOS token ID to terminate generation. Defaults to 32000.
+            return_tokens (bool): If True, returns torch.Tensor of token IDs instead of string.
+
+        Returns:
+            str: Detokenized generated answer text (or torch.Tensor if return_tokens=True).
+        """
+        if tokenizer is None:
+            from transformers import AutoTokenizer
+            tokenizer = AutoTokenizer.from_pretrained('microsoft/Phi-3.5-mini-instruct')
+
+        device = next(self.parameters()).device
+        if isinstance(prompt, str):
+            input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+        else:
+            input_ids = prompt.to(device)
+
+        if eos_token_id is None and hasattr(tokenizer, "eos_token_id"):
+            eos_token_id = tokenizer.eos_token_id
+
+        generated_tokens = []
+        curr_input_ids = input_ids
+
+        for _ in range(max_tokens):
+            logits = self.forward(curr_input_ids)
+            next_token = torch.argmax(logits[:, -1, :], dim=-1, keepdim=True)
+            token_id = next_token.item()
+            generated_tokens.append(token_id)
+            if eos_token_id is not None and token_id == eos_token_id:
+                break
+            curr_input_ids = torch.cat([curr_input_ids, next_token], dim=-1)
+
+        if return_tokens:
+            return torch.tensor(generated_tokens, dtype=torch.long, device=device)
+
+        return tokenizer.decode(generated_tokens)
 
 
 class Phi3RMSNorm(nn.Module):
@@ -110,7 +152,7 @@ class Phi3RotaryPositionEmbedding(nn.Module):
     - https://nn.labml.ai/transformers/rope/index.html
     - https://fleetwood.dev/posts/you-could-have-designed-SOTA-positional-encoding
     """
-    def __init__(self, config: PhiLMConfig):
+    def __init__(self, config: PhiLMConfig, dtype: torch.dtype = torch.bfloat16):
         super().__init__()
 
         self.dim = config.hidden_size // config.num_attention_heads
@@ -118,9 +160,11 @@ class Phi3RotaryPositionEmbedding(nn.Module):
         self.rope_theta = config.rope_theta
 
         self.cache = None
-        self.cos, self.sin = self._init_cache()
+        cos, sin = self._init_cache(dtype=dtype)
+        self.register_buffer("cos", cos, persistent=False)
+        self.register_buffer("sin", sin, persistent=False)
 
-    def _init_cache(self) -> Tuple[torch.Tensor]:
+    def _init_cache(self, dtype: torch.dtype = torch.bfloat16) -> Tuple[torch.Tensor, torch.Tensor]:
         """ return cos and sin cache as shape (seq, dim)
         """
         # force float32 to avoid precision issues
@@ -133,11 +177,11 @@ class Phi3RotaryPositionEmbedding(nn.Module):
         cache = torch.cat((cache, cache), dim=-1)
         self.cache = cache
 
-        return cache.cos().to(torch.bfloat16), cache.sin().to(torch.bfloat16)
+        return cache.cos().to(dtype), cache.sin().to(dtype)
 
     def rotate_half(self, x: torch.Tensor) -> torch.Tensor:
-        x0 = x[:x.shape[-1] // 2]
-        x1 = x[x.shape[-1] // 2:]
+        x0 = x[..., :x.shape[-1] // 2]
+        x1 = x[..., x.shape[-1] // 2:]
 
         return torch.cat((-x1, x0), dim=-1)
 
@@ -145,10 +189,10 @@ class Phi3RotaryPositionEmbedding(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """ assume the x input is of shape (bs, head, seq, head_dim)
         """
-        bs, nhead, s, head_dim = x.shape
+        _, _, s, head_dim = x.shape
 
-        cos = self.cos[:, :s, :].to(x.dtype)
-        sin = self.sin[:, :s, :].to(x.dtype)
+        cos = self.cos[:s, :].view(1, 1, s, head_dim).to(device=x.device, dtype=x.dtype)
+        sin = self.sin[:s, :].view(1, 1, s, head_dim).to(device=x.device, dtype=x.dtype)
 
         return x * cos + self.rotate_half(x) * sin
 
@@ -198,7 +242,8 @@ class AttentionLayer(nn.Module):
             'mask',
             torch.tril(torch.ones(seq, seq, dtype=torch.bfloat16)).view(
                 1, 1, seq, seq,
-            )
+            ),
+            persistent=False,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -218,7 +263,7 @@ class AttentionLayer(nn.Module):
 
         q = q.contiguous().view(hidden_shape).transpose(1, 2)
         k = k.contiguous().view(hidden_shape).transpose(1, 2)
-        v = k.contiguous().view(hidden_shape).transpose(1, 2)
+        v = v.contiguous().view(hidden_shape).transpose(1, 2)
 
         q = self.rope(q)
         k = self.rope(k)
