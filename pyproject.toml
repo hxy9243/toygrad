@@ -1,14 +1,23 @@
-[tool.poetry]
-name = "toygrad"
+[project]
+name = "toyai"
 version = "0.1.0"
-description = "A toy implementation of autograd algorithm"
-authors = ["Kevin Hu <hxy9243@gmail.com>"]
+description = "A collection of AI algorithm implementation"
+authors = [
+    { name = "Kevin Hu", email = "hxy9243@gmail.com" },
+]
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.10"
-
+requires-python = ">=3.13"
+dependencies = [
+    "fpdf2>=2.8.5",
+    "numpy>=2.3.4",
+    "tinker>=0.2.2",
+    "torch>=2.9.0",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "toygrad"
+module-root = ""
