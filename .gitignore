@@ -244,3 +244,9 @@ pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,emacs
 .venv
+
+# LLM Serving Harness
+llm-serving/output/
+llm-serving/hosts.local.yaml
+llm-serving/report.md
+report.md

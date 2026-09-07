@@ -1,0 +1,33 @@
+schema_version: 1
+name: qwen35-0.8b-smoke
+
+model:
+  id: Qwen/Qwen3.5-0.8B
+  revision: main
+  variant: BF16
+  dtype: auto
+  quantization: null
+
+parallelism:
+  tensor_parallel: 1
+  data_parallel: 1
+
+server:
+  max_model_len: 16384
+  gpu_memory_utilization: 0.80
+  trust_remote_code: false
+  startup_timeout_seconds: 600
+  extra_args: []
+
+sweep:
+  cuda_graphs: [true, false]
+  # Qwen3.5 uses Mamba's aligned cache mode, which vLLM requires to run
+  # with chunked prefill enabled.
+  chunked_prefill: [true]
+  repetitions: 1
+
+quality:
+  tasks:
+    - name: gsm8k
+      num_fewshot: 5
+      limit: 20

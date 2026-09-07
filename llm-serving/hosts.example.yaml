@@ -1,0 +1,73 @@
+# Host Inventory Configuration Example
+# Copy this file to hosts.local.yaml for actual runs (hosts.local.yaml is gitignored).
+
+schema_version: 1
+
+hosts:
+  h100-node1:
+    # SSH target: [user@]hostname[:port] or SSH config host alias
+    ssh_target: "gpu-node1.internal"
+    ssh_port: 22
+    ssh_user: "ubuntu"
+    # Optional path to an SSH private key file
+    ssh_key_path: null
+
+    # `docker` builds/runs the pinned harness image. `host` uses an existing remote Python environment.
+    execution_mode: "docker"
+    # Used only with execution_mode: host; vLLM (and lm_eval when quality tasks are enabled) must be installed here.
+    python_executable: "python3"
+    # Optional host-mode environment variables, e.g. VLLM_USE_FLASHINFER_SAMPLER: "0"
+    environment: {}
+
+    # Absolute directory on the remote host for staging and container runtime artifacts
+    remote_root: "/home/ubuntu/llm-serving-staging"
+
+    # GPU configuration
+    # Selected GPU device indices to allocate to the vLLM container
+    gpu_ids: [0]
+    # Expected GPU model substring/regex for preflight hardware verification
+    expected_gpu_model: "H100"
+
+    # Persistent host directory paths mapped into the container
+    hf_cache_path: "/home/ubuntu/.cache/huggingface"
+    vllm_cache_path: "/home/ubuntu/.cache/vllm"
+
+    # Optional path to a remote environment file containing secrets (e.g. HF_TOKEN)
+    # This file MUST reside directly on the remote host and is NEVER synchronized from local.
+    secret_env_file: "/home/ubuntu/.secrets/huggingface.env"
+
+    # Minimum free disk space in GB required on remote_root filesystem
+    min_disk_space_gb: 50.0
+
+  h100-node2-8gpu:
+    ssh_target: "gpu-node2.internal"
+    ssh_port: 22
+    ssh_user: "ubuntu"
+    ssh_key_path: null
+    execution_mode: "docker"
+    python_executable: "python3"
+    environment: {}
+    remote_root: "/home/ubuntu/llm-serving-staging"
+    gpu_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+    expected_gpu_model: "H100"
+    hf_cache_path: "/home/ubuntu/.cache/huggingface"
+    vllm_cache_path: "/home/ubuntu/.cache/vllm"
+    secret_env_file: "/home/ubuntu/.secrets/huggingface.env"
+    min_disk_space_gb: 100.0
+
+  local-mock:
+    # For local testing or mocked transports
+    ssh_target: "localhost"
+    ssh_port: 22
+    ssh_user: "kevin"
+    ssh_key_path: null
+    execution_mode: "docker"
+    python_executable: "python3"
+    environment: {}
+    remote_root: "/tmp/llm-serving-staging"
+    gpu_ids: [0]
+    expected_gpu_model: "MockGPU"
+    hf_cache_path: "/tmp/cache/huggingface"
+    vllm_cache_path: "/tmp/cache/vllm"
+    secret_env_file: null
+    min_disk_space_gb: 1.0

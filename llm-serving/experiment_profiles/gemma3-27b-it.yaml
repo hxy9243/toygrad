@@ -1,0 +1,31 @@
+schema_version: 1
+name: gemma3-27b-it
+
+model:
+  id: google/gemma-3-27b-it
+  revision: main
+  variant: BF16
+  dtype: auto
+  quantization: null
+
+parallelism:
+  tensor_parallel: 1
+  data_parallel: 1
+
+server:
+  max_model_len: 16384
+  gpu_memory_utilization: 0.90
+  trust_remote_code: false
+  startup_timeout_seconds: 3600
+  extra_args: []
+
+sweep:
+  cuda_graphs: [true, false]
+  chunked_prefill: [true, false]
+  repetitions: 1
+
+quality:
+  tasks:
+    - name: gsm8k
+      num_fewshot: 5
+      limit: 250
