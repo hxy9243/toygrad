@@ -1,0 +1,30 @@
+services:
+  yue2-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: yue2-serving:latest
+    container_name: yue2-serving
+    ports:
+      - "8000:8000"
+    environment:
+      - YUE2_MODEL=m-a-p/YuE2-3B
+      - YUE2_VAE=m-a-p/YuE2-Vae
+      - YUE2_DEVICE=auto
+      - YUE2_MEMORY_BUDGET_GIB=24
+      - HF_HOME=/root/.cache/huggingface
+    volumes:
+      # Persist downloaded Hugging Face weights across container restarts
+      - yue2-hf-cache:/root/.cache/huggingface
+    restart: unless-stopped
+    # Uncomment deploy section below when running on host with NVIDIA GPUs
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  yue2-hf-cache:
