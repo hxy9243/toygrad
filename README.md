@@ -25,7 +25,7 @@ pytest test_server.py -v
 
 # Start the server
 python server.py
-# Default host: 0.0.0.0, port: 8000
+# Default host: 0.0.0.0, port: 8008
 ```
 
 ### 2. Docker Setup
@@ -36,7 +36,7 @@ docker compose up -d
 
 # Or build manually
 docker build -t yue2-serving:latest .
-docker run -p 8000:8000 --gpus all yue2-serving:latest
+docker run -p 8008:8008 --gpus all yue2-serving:latest
 ```
 
 ---
@@ -49,7 +49,7 @@ docker run -p 8000:8000 --gpus all yue2-serving:latest
 ```python
 from openai import OpenAI
 
-client = OpenAI(base_url="http://localhost:8000/v1", api_key="dummy")
+client = OpenAI(base_url="http://localhost:8008/v1", api_key="dummy")
 
 response = client.chat.completions.create(
     model="YuE2-3B",
@@ -72,7 +72,7 @@ print(response.choices[0].message.content)
 
 #### cURL:
 ```bash
-curl -X POST http://localhost:8000/v1/chat/completions \
+curl -X POST http://localhost:8008/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "YuE2-3B",
@@ -88,7 +88,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 #### JavaScript / Browser / Node.js:
 ```javascript
-const response = await fetch("http://localhost:8000/v1/chat/completions", {
+const response = await fetch("http://localhost:8008/v1/chat/completions", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -119,7 +119,7 @@ fs.writeFileSync('yue2_artifacts.zip', Buffer.from(arrayBuffer));
 
 #### cURL:
 ```bash
-curl -X POST http://localhost:8000/v1/chat/completions \
+curl -X POST http://localhost:8008/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Accept: application/octet-stream" \
   -d '{

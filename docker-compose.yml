@@ -6,7 +6,7 @@ services:
     image: yue2-serving:latest
     container_name: yue2-serving
     ports:
-      - "8000:8000"
+      - "8008:8008"
     environment:
       - YUE2_MODEL=m-a-p/YuE2-3B
       - YUE2_VAE=m-a-p/YuE2-Vae
