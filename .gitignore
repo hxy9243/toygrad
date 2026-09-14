@@ -43,3 +43,4 @@ outputs/
 # Environment & OS
 .env
 .DS_Store
+!yue2_infer-*.whl
