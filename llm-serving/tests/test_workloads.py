@@ -8,8 +8,8 @@ from llm_serving.workloads import (
 
 
 def test_workload_definitions():
-    assert len(WORKLOADS) == 3
-    short, long_p, decode = WORKLOADS[0], WORKLOADS[1], WORKLOADS[2]
+    assert len(WORKLOADS) == 4
+    short, long_p, near_limit, decode = WORKLOADS
 
     assert short.slug == "short-interactive"
     assert short.input_len == 256
@@ -26,6 +26,12 @@ def test_workload_definitions():
     assert long_p.num_warmups == 4
     assert long_p.request_rate == 1.0
     assert long_p.max_concurrency == 8
+
+    assert near_limit.slug == "near-limit-prefill"
+    assert near_limit.input_len == 15360
+    assert near_limit.output_len == 256
+    assert near_limit.num_prompts == 16
+    assert near_limit.max_concurrency == 2
 
     assert decode.slug == "decode-heavy"
     assert decode.input_len == 256

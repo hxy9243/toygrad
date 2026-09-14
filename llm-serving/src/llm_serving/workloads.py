@@ -38,6 +38,16 @@ WORKLOADS: List[BenchmarkWorkload] = [
         max_concurrency=8,
     ),
     BenchmarkWorkload(
+        name="Near-limit prefill",
+        slug="near-limit-prefill",
+        input_len=15360,
+        output_len=256,
+        num_prompts=16,
+        num_warmups=2,
+        request_rate=0.5,
+        max_concurrency=2,
+    ),
+    BenchmarkWorkload(
         name="Decode heavy",
         slug="decode-heavy",
         input_len=256,

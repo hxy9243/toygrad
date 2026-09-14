@@ -85,7 +85,7 @@ def test_successful_full_sweep_and_eval(tmp_path, profile_fixture, host_fixture)
     assert len(summary["cases"]) == 4
     for c in summary["cases"]:
         assert c["status"] == "SUCCESS"
-        assert len(c["benchmarks"]) == 3
+        assert len(c["benchmarks"]) == 4
 
     assert len(summary["quality"]) >= 1
     assert summary["quality"][0]["task_name"] == "gsm8k"
@@ -320,7 +320,7 @@ def test_missing_benchmark_json_fallback(tmp_path, profile_fixture, host_fixture
     with open(run_dir / "summary.json") as f:
         summary = json.load(f)
     # Workloads should still be recorded even if empty/null metrics
-    assert len(summary["cases"][0]["benchmarks"]) == 3
+    assert len(summary["cases"][0]["benchmarks"]) == 4
     assert summary["cases"][0]["benchmarks"][0]["request_throughput_req_per_s"] is None
 
 

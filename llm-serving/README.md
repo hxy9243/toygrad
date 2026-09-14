@@ -9,6 +9,7 @@ Isolated, reproducible benchmark and evaluation harness for parameter sweeps ove
 - **Reproducible Workloads**:
   - Short interactive (256 in / 128 out, 8 req/s, concurrency 32)
   - Long prefill (8192 in / 128 out, 1 req/s, concurrency 8)
+  - Near-limit prefill (15360 in / 256 out, 0.5 req/s, concurrency 2)
   - Decode heavy (256 in / 1024 out, 2 req/s, concurrency 16)
 - **Quality Evaluation**: Built-in lm-eval (e.g. GSM8K 5-shot) against the baseline serving configuration.
 - **Fail-Safe Retries & Artifact Preservation**: 1 automatic retry on failure; immediate abort on second failure while retrieving partial results and generating structured reports.
