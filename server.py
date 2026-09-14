@@ -88,9 +88,11 @@ class ChatCompletionRequest(BaseModel):
     # Serving & delivery options
     stage: Literal["plan", "audio"] = "audio"
     return_format: Literal["json", "abc", "arraybuffer", "audio"] = "json"
+    duration: Optional[float] = None  # Desired duration in seconds (used in mock mode or to guide min_tokens)
+    min_tokens: Optional[int] = None
+    max_tokens: Optional[int] = None
     temperature: Optional[float] = None
     top_p: Optional[float] = None
-    max_tokens: Optional[int] = None
     stream: bool = False
 
 
@@ -214,20 +216,28 @@ def mock_generate(req_data: dict, stage: str):
         }
         return abc, None, plan_dict, result_dict, None, None
 
-    # Mock audio generation: 2 seconds of synthetic 48kHz stereo sine chime
+    # Mock audio generation: generate stereo 48kHz music of requested duration
     sample_rate = 48000
-    duration = 2.0
+    duration = float(req_data.get("duration") or 30.0)
     t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
-    left = 0.2 * np.sin(2 * np.pi * 440 * t) * np.exp(-t)
-    right = 0.2 * np.sin(2 * np.pi * 554.37 * t) * np.exp(-t)
-    audio_data = np.stack([left, right], axis=-1)
+    # Generate melodic harmonic chords across the duration
+    left = 0.15 * np.sin(2 * np.pi * 440 * t) + 0.1 * np.sin(2 * np.pi * 554.37 * t)
+    right = 0.15 * np.sin(2 * np.pi * 659.25 * t) + 0.1 * np.sin(2 * np.pi * 880 * t)
+    # Envelope to prevent clicks
+    env = np.ones_like(t)
+    fade_len = int(sample_rate * 0.1)
+    if len(t) > 2 * fade_len:
+        env[:fade_len] = np.linspace(0, 1, fade_len)
+        env[-fade_len:] = np.linspace(1, 0, fade_len)
+    audio_data = np.stack([left * env, right * env], axis=-1).astype(np.float32)
 
     audio_buf = io.BytesIO()
     sf.write(audio_buf, audio_data, sample_rate, format="FLAC", subtype="PCM_24")
     audio_bytes = audio_buf.getvalue()
 
-    semantic_tokens = [100, 200, 300, 400]
-    latents = np.zeros((64, 100), dtype=np.float32)
+    token_count = int(duration * 42)
+    semantic_tokens = list(range(token_count))
+    latents = np.zeros((64, token_count), dtype=np.float32)
 
     result_dict = {
         "status": "complete",
@@ -237,7 +247,7 @@ def mock_generate(req_data: dict, stage: str):
         "identity": f"mock-{uuid.uuid4()}",
         "timing": {"e2e_seconds": 1.2, "vae_seconds": 0.3},
         "request": req_data,
-        "config": {"seed": seed, "stage": stage},
+        "config": {"seed": seed, "stage": stage, "duration": duration},
     }
 
     return abc, audio_bytes, plan_dict, result_dict, semantic_tokens, latents
@@ -256,6 +266,22 @@ def run_real_generation(pipe, req_data: dict, stage: str):
         seed = int(time.time()) % 1_000_000
     cfg_scale = req_data.get("cfg_scale", 1.0)
     provided_abc = req_data.get("abc")
+
+    # Build semantic sampling controls for song duration
+    semantic_sampling = {}
+    if req_data.get("min_tokens"):
+        semantic_sampling["min_tokens"] = int(req_data["min_tokens"])
+    elif req_data.get("duration"):
+        # ~42 tokens per second of 48kHz audio in YuE2
+        semantic_sampling["min_tokens"] = max(200, int(float(req_data["duration"]) * 42))
+
+    if req_data.get("max_tokens"):
+        semantic_sampling["max_tokens"] = int(req_data["max_tokens"])
+    elif req_data.get("duration"):
+        semantic_sampling["max_tokens"] = max(
+            semantic_sampling.get("min_tokens", 200),
+            int(float(req_data["duration"]) * 42) + 200,
+        )
 
     if stage == "plan":
         plan = pipe.plan(style=style, lyrics=lyrics, cot=cot, seed=seed, abc=provided_abc)
@@ -286,6 +312,7 @@ def run_real_generation(pipe, req_data: dict, stage: str):
         seed=seed,
         cfg_scale=cfg_scale,
         abc=provided_abc,
+        semantic_sampling=semantic_sampling or None,
     )
     abc = song.abc
     audio_buf = io.BytesIO()
@@ -379,6 +406,9 @@ async def chat_completions(
         "cfg_scale": req.cfg_scale,
         "abc": req.abc,
         "stage": stage,
+        "duration": req.duration,
+        "min_tokens": req.min_tokens,
+        "max_tokens": req.max_tokens,
     }
 
     async with pipeline_lock:
