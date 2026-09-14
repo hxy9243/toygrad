@@ -1,8 +1,8 @@
 services:
   yue2-server:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: yue2/Dockerfile
     image: yue2-serving:latest
     container_name: yue2-serving
     ports:

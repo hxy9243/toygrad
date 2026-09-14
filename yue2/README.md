@@ -34,8 +34,8 @@ python -m app.server
 # Build and run using Docker Compose (simulating volume mount)
 docker compose up -d
 
-# Or build manually for GPU
-docker build -t yue2-serving:latest .
+# Or build manually for GPU (from workspace root)
+docker build -f yue2/Dockerfile -t yue2-serving:latest .
 
 # Run as RunPod Serverless worker:
 docker run --gpus all -v yue2-volume:/runpod-volume yue2-serving:latest

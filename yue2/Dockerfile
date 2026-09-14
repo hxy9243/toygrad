@@ -25,15 +25,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace
 
 # Copy dependency specifications and wheel
-COPY requirements.txt .
-COPY yue2_infer-0.1.5-py3-none-any.whl .
+COPY yue2/requirements.txt .
+COPY yue2/yue2_infer-0.1.5-py3-none-any.whl .
 
 # Install python dependencies (including CUDA-enabled PyTorch and RunPod SDK)
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt
 
 # Copy application modules
-COPY app/ ./app/
+COPY yue2/app/ ./app/
 
 # Expose port for optional standalone HTTP/FastAPI serving
 EXPOSE 8008
