@@ -21,6 +21,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 # Application configuration
+try:
+    from app.model_cache import get_cache_info
+except ImportError:
+    from model_cache import get_cache_info
+
 MODEL_NAME = os.getenv("YUE2_MODEL", "m-a-p/YuE2-3B")
 VAE_NAME = os.getenv("YUE2_VAE", "m-a-p/YuE2-Vae")
 DEVICE = os.getenv("YUE2_DEVICE", "auto")
@@ -363,6 +368,7 @@ async def health():
         "cuda_available": torch.cuda.is_available(),
         "model": MODEL_NAME,
         "vae": VAE_NAME,
+        "cache": get_cache_info(),
     }
 
 

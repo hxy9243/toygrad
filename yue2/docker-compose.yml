@@ -12,10 +12,11 @@ services:
       - YUE2_VAE=m-a-p/YuE2-Vae
       - YUE2_DEVICE=auto
       - YUE2_MEMORY_BUDGET_GIB=24
-      - HF_HOME=/root/.cache/huggingface
+      - HF_HOME=/runpod-volume/cache/huggingface
     volumes:
-      # Persist downloaded Hugging Face weights across container restarts
-      - yue2-hf-cache:/root/.cache/huggingface
+      # Persist downloaded weights simulating RunPod Network Volume
+      - yue2-volume:/runpod-volume
+    command: ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8008"]
     restart: unless-stopped
     # Uncomment deploy section below when running on host with NVIDIA GPUs
     # deploy:
@@ -27,4 +28,4 @@ services:
     #           capabilities: [gpu]
 
 volumes:
-  yue2-hf-cache:
+  yue2-volume:

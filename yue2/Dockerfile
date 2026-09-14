@@ -1,15 +1,16 @@
-# YuE2-3B OpenAI-Compatible Serving Container
-FROM python:3.12-slim-bookworm
+# YuE2-3B RunPod Serverless & OpenAI-Compatible Serving Container
+FROM runpod/base:0.6.2-cuda12.4.1
 
 # Set non-interactive and environment variables
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
-    HF_HOME=/root/.cache/huggingface \
+    HF_HOME=/runpod-volume/cache/huggingface \
+    HF_HUB_ENABLE_HF_TRANSFER=1 \
     PORT=8008 \
     HOST=0.0.0.0 \
     YUE2_MODEL="m-a-p/YuE2-3B" \
     YUE2_VAE="m-a-p/YuE2-Vae" \
-    YUE2_DEVICE="auto" \
+    YUE2_DEVICE="cuda" \
     YUE2_MEMORY_BUDGET_GIB=24
 
 # Install system dependencies (libsndfile for audio processing, ffmpeg, curl)
@@ -21,24 +22,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /workspace
 
 # Copy dependency specifications and wheel
 COPY requirements.txt .
 COPY yue2_infer-0.1.5-py3-none-any.whl .
 
-# Install python dependencies
+# Install python dependencies (including CUDA-enabled PyTorch and RunPod SDK)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cu124 -r requirements.txt
 
-# Copy server code
-COPY server.py .
+# Copy application modules
+COPY app/ ./app/
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8008/health || exit 1
-
+# Expose port for optional standalone HTTP/FastAPI serving
 EXPOSE 8008
 
-# Start Uvicorn serving endpoint
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8008"]
+# Default to RunPod Serverless worker entrypoint
+# (Can be overridden to ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8008"] for HTTP serving)
+CMD ["python", "-u", "-m", "app.handler"]

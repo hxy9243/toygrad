@@ -20,28 +20,79 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# Run unit and integration tests
-pytest test_server.py -v
+# Run unit and integration tests (mock mode)
+pytest app/test_server.py -v
 
-# Start the server
-python server.py
-# Default host: 0.0.0.0, port: 8008
+# Start the OpenAI-compatible FastAPI server locally
+python -m app.server
+# Or: uvicorn app.server:app --host 0.0.0.0 --port 8008
 ```
 
 ### 2. Docker Setup
 
 ```bash
-# Build and run using Docker Compose
+# Build and run using Docker Compose (simulating volume mount)
 docker compose up -d
 
-# Or build manually
+# Or build manually for GPU
 docker build -t yue2-serving:latest .
-docker run -p 8008:8008 --gpus all yue2-serving:latest
+
+# Run as RunPod Serverless worker:
+docker run --gpus all -v yue2-volume:/runpod-volume yue2-serving:latest
+
+# Or run as standalone HTTP server:
+docker run -p 8008:8008 --gpus all -v yue2-volume:/runpod-volume yue2-serving:latest \
+  uvicorn app.server:app --host 0.0.0.0 --port 8008
 ```
 
 ---
 
-## 📡 API Usage Examples
+## ⚡ RunPod Serverless Deployment
+
+### 1. Architecture & Model Caching
+- **Base Image**: `runpod/base:0.6.2-cuda12.4.1` with CUDA 12.4 runtime and PyTorch GPU support.
+- **Model Caching (Zero Image Bloat)**:
+  Instead of baking 10GB+ weights into the image, attach a **RunPod Network Volume** mounted to `/runpod-volume`.
+  `app/model_cache.py` directs `HF_HOME` to `/runpod-volume/cache/huggingface`.
+  - On first worker cold-start in a data center region, weights download with multi-stream `hf-transfer` into the shared volume.
+  - On subsequent cold starts, any worker attaching the same volume boots instantly from disk cache.
+  - If no network volume is attached, it gracefully falls back to local disk storage (`~/.cache/huggingface`).
+
+### 2. Worker Handler (`app/handler.py`)
+RunPod Serverless invokes `app.handler:handler`.
+
+#### Example Serverless Job Payload:
+```json
+{
+  "input": {
+    "model": "YuE2-3B",
+    "style": "Synthwave, 80s analog synth, driving bassline",
+    "lyrics": "[Verse]\nCity of neon lights\n[Chorus]\nRunning through the night",
+    "stage": "audio",
+    "return_format": "json",
+    "duration": 30.0
+  }
+}
+```
+
+#### Example Serverless Job Response:
+```json
+{
+  "status": "success",
+  "stage": "audio",
+  "return_format": "json",
+  "execution_time_seconds": 12.4,
+  "abc": "X:1\nT:...",
+  "audio_base64": "...",
+  "audio_format": "flac",
+  "sample_rate": 48000,
+  "result": { ... }
+}
+```
+
+---
+
+## 📡 API Usage Examples (FastAPI / HTTP Mode)
 
 ### Option 1: Return ABC Notation Only (`stage="plan"` / `return_format="abc"`)
 

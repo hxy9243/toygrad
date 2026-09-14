@@ -1,4 +1,5 @@
 """Tests for the YuE2 OpenAI-compatible serving server."""
+import base64
 import io
 import json
 import zipfile
@@ -9,7 +10,12 @@ from fastapi.testclient import TestClient
 import os
 os.environ["MOCK_YUE2"] = "1"
 
-from server import app, SAMPLE_ABC
+try:
+    from app.server import app, SAMPLE_ABC
+    from app.handler import handler
+except ImportError:
+    from server import app, SAMPLE_ABC
+    from handler import handler
 
 client = TestClient(app)
 
@@ -132,3 +138,68 @@ def test_chat_completions_json_with_audio():
     assert "audio" in choice["message"]
     assert choice["message"]["audio"]["format"] == "flac"
     assert len(choice["message"]["audio"]["data"]) > 0
+
+
+def test_runpod_handler_plan():
+    job = {
+        "id": "test-job-plan",
+        "input": {
+            "style": "Cinematic Orchestral",
+            "lyrics": "[Verse]\nEchoes in the dark",
+            "stage": "plan",
+            "return_format": "abc",
+        }
+    }
+    res = handler(job)
+    assert res["status"] == "success"
+    assert res["stage"] == "plan"
+    assert "abc" in res
+    assert "X:1" in res["abc"] or "T:" in res["abc"]
+    assert "plan" in res
+
+
+def test_runpod_handler_audio_json():
+    job = {
+        "id": "test-job-audio",
+        "input": {
+            "style": "Synthwave",
+            "lyrics": "[Chorus]\nNeon nights",
+            "stage": "audio",
+            "return_format": "json",
+            "duration": 5.0,
+        }
+    }
+    res = handler(job)
+    assert res["status"] == "success"
+    assert res["stage"] == "audio"
+    assert "audio_base64" in res
+    assert res["audio_format"] == "flac"
+    assert res["sample_rate"] == 48000
+
+
+def test_runpod_handler_arraybuffer_zip():
+    job = {
+        "id": "test-job-zip",
+        "input": {
+            "style": "Acoustic Folk",
+            "lyrics": "[Verse]\nGentle breeze",
+            "return_format": "arraybuffer",
+            "duration": 2.0,
+        }
+    }
+    res = handler(job)
+    assert res["status"] == "success"
+    assert "zip_base64" in res
+    raw_zip = base64.b64decode(res["zip_base64"])
+    with zipfile.ZipFile(io.BytesIO(raw_zip), "r") as zf:
+        assert "score.abc" in zf.namelist()
+        assert "audio.flac" in zf.namelist()
+        assert "plan.json" in zf.namelist()
+        assert "result.json" in zf.namelist()
+
+
+def test_runpod_handler_missing_input():
+    res = handler({})
+    assert res["status"] == "error"
+    assert "Missing 'input'" in res["message"]
+
